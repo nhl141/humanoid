@@ -1,0 +1,41 @@
+# Dataset schema: Pioneer bimanual arm, LEFT (L-suffixed) arm pick-and-place, recorded by
+# src/simulation/humanoid_vla/vla_keyboard_teleop.py --record.
+#
+# fps must divide the sim rate evenly: physics dt = 0.01 s (100 Hz), so 25 fps = every 4th step.
+robot_id: pioneer_bimanual_left_sim_v1
+repo_id: humanoid/pioneer_vla_pick_place
+fps: 25
+state_unit: rad (arm), m (gripper fingers)
+
+# observation.state AND action use this order (state = measured, action = commanded targets).
+# joint7l/joint8l are the two prismatic fingers, driven as a coupled pair (open 0/0,
+# closed -0.05/+0.05), so the gripper is part of the action vector.
+joint_names:
+  - joint1L
+  - joint2l
+  - joint3l
+  - joint4l
+  - joint5l
+  - joint6l
+  - joint7l
+  - joint8l
+
+# Keys become observation.images.<key>. Sizes must match the CameraCfg sensors in
+# vla_keyboard_teleop.py's MySceneCfg (checked at startup).
+images:
+  base:
+    height: 256
+    width: 256
+    enabled: true
+  wrist_left:
+    height: 256
+    width: 256
+    enabled: true
+  wrist_right:
+    height: 256
+    width: 256
+    enabled: true
+
+record:
+  root: datasets/pioneer_vla_pick_place
+  use_videos: true

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import queue
+import shutil
 import subprocess
 import threading
 import time
@@ -86,6 +87,8 @@ class SimLeRobotRecorder:
         recorder.save_episode()   # enqueues async save, clears buffers
         # on cancel:
         recorder.cancel_recording()
+        # undo the most recent save_episode():
+        recorder.delete_last_saved_episode()
         # after all episodes:
         recorder.finalize()
     """
@@ -233,6 +236,11 @@ class SimLeRobotRecorder:
 
     _NUM_CPU_SLOTS = 2
 
+    # Queue marker for delete_last_saved_episode(). It travels through the same
+    # queue as episodes, so it runs on the writer thread strictly after every
+    # save queued before it -- the dataset only ever has one writer.
+    _DELETE_LAST = object()
+
     def init_dataset(self) -> None:
         """Create or re-open the LeRobot dataset on disk."""
         from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -241,6 +249,11 @@ class SimLeRobotRecorder:
         if self._free_slots.empty():
             self._allocate_cpu_slots()
         root = self.dataset_root
+        if root.exists() and self._is_empty_dataset(root):
+            # B pressed, but no episode ever saved: LeRobotDataset cannot re-open that
+            # shell, and there is nothing in it to keep, so start it over.
+            print(f"[INFO]: {root} holds no episodes -- re-creating it")
+            shutil.rmtree(root)
         if root.exists():
             try:
                 self.dataset = LeRobotDataset(self.repo_id, root=root)
@@ -253,7 +266,24 @@ class SimLeRobotRecorder:
                     "  A run that ended before saving an episode leaves a folder LeRobotDataset "
                     "cannot re-open. Delete it (or pass --dataset_root elsewhere) and retry."
                 ) from exc
+        self._create_dataset()
 
+    @staticmethod
+    def _is_empty_dataset(root: Path) -> bool:
+        """True for a dataset folder with 0 episodes and no data written."""
+        import json
+
+        info = root / "meta" / "info.json"
+        try:
+            total = json.loads(info.read_text()).get("total_episodes")
+        except (OSError, ValueError):
+            return False            # unreadable or not a dataset -- leave it alone
+        return total == 0 and not (root / "data").exists()
+
+    def _create_dataset(self) -> None:
+        from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+        root = self.dataset_root
         self.dataset = LeRobotDataset.create(
             self.repo_id,
             fps=self.fps,
@@ -401,6 +431,16 @@ class SimLeRobotRecorder:
         self._clear_buffers()
         print("[INFO]: Episode queued for saving.")
 
+    def delete_last_saved_episode(self) -> None:
+        """Queue deletion of the most recently saved episode on disk.
+
+        Returns immediately; the delete runs on the writer thread after any saves
+        already queued, so it always removes the episode saved last. Deleting
+        rewrites the dataset (LeRobot has no in-place delete), so it can take a
+        few seconds on a large dataset -- the sim keeps running meanwhile.
+        """
+        self._episode_queue.put(self._DELETE_LAST)
+
     def cancel_recording(self) -> None:
         """Discard the current episode buffer without saving."""
         self._clear_buffers()
@@ -421,6 +461,14 @@ class SimLeRobotRecorder:
                 episode = self._episode_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
+            if episode is self._DELETE_LAST:
+                try:
+                    self._delete_last_episode()
+                except Exception as exc:
+                    print(f"[ERROR]: Deleting the last episode failed: {exc}")
+                finally:
+                    self._episode_queue.task_done()
+                continue
             try:
                 self._process_episode(episode)
                 self.num_recorded_episodes += 1
@@ -431,6 +479,38 @@ class SimLeRobotRecorder:
                 self._free_slots.put(episode)  # recycle the pinned slot
                 self._episode_queue.task_done()
                 self._trim_native_heap()
+
+    def _delete_last_episode(self) -> None:
+        """Remove the highest-index episode from the dataset on disk (writer thread)."""
+        from lerobot.datasets.dataset_tools import delete_episodes
+        from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+        total = self.dataset.meta.total_episodes if self.dataset is not None else 0
+        if total == 0:
+            print("[INFO]: No saved episode to delete.")
+            return
+        root = self.dataset_root
+        if total == 1:
+            # delete_episodes refuses to produce an empty dataset; with a single
+            # episode, deleting it means deleting the dataset. The next save
+            # re-creates it (see _process_episode).
+            shutil.rmtree(root)
+            self.dataset = None
+        else:
+            # Write the kept episodes to a sibling folder, then swap it in. Until the
+            # swap the original is untouched, so a failure here loses nothing.
+            staging = root.with_name(root.name + ".deleting")
+            old = root.with_name(root.name + ".old")
+            for leftover in (staging, old):
+                if leftover.exists():
+                    shutil.rmtree(leftover)
+            delete_episodes(self.dataset, [total - 1], output_dir=staging, repo_id=self.repo_id)
+            root.rename(old)
+            staging.rename(root)
+            shutil.rmtree(old)
+            self.dataset = LeRobotDataset(self.repo_id, root=root)
+        self.num_recorded_episodes = max(0, self.num_recorded_episodes - 1)
+        print(f"[INFO]: Deleted episode {total - 1}; {total - 1} episode(s) left in {root}.")
 
     @staticmethod
     def _trim_native_heap() -> None:
@@ -458,6 +538,8 @@ class SimLeRobotRecorder:
         """
         from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+        if self.dataset is None:          # every episode was deleted since the last save
+            self._create_dataset()
         n = episode["total_frames"]
         for i in tqdm(range(n), desc="Processing frames", unit="frame"):
             frame: dict[str, Any] = {

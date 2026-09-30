@@ -1,0 +1,194 @@
+#usda 1.0
+(
+    customLayerData = {
+        dictionary cameraSettings = {
+            dictionary Perspective = {
+                double3 position = (1.569, 0.042, 1)
+                double3 target = (0.069, 0.042, 0.4)
+            }
+            string boundCamera = "/OmniverseKit_Persp"
+        }
+    }
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World" (
+    prepend references = @./bimanual_arm.usd@
+)
+{
+    def Xform "LightBox" (
+        kind = "group"
+    )
+    {
+        def RectLight "Light_Back"
+        {
+            color3f inputs:color = (1, 1, 1)
+            float inputs:height = 0.762
+            float inputs:intensity = 3000
+            bool inputs:normalize = 1
+            float inputs:width = 1.016
+            float3 xformOp:rotateXYZ = (0, -90, 0)
+            float3 xformOp:translate = (-0.185, 0.042, 0.381)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+        }
+
+        def RectLight "Light_Left"
+        {
+            color3f inputs:color = (1, 1, 1)
+            float inputs:height = 0.762
+            float inputs:intensity = 3000
+            bool inputs:normalize = 1
+            float inputs:width = 0.508
+            float3 xformOp:rotateXYZ = (90, 0, 0)
+            float3 xformOp:translate = (0.069, -0.466, 0.381)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+        }
+
+        def RectLight "Light_Right"
+        {
+            color3f inputs:color = (1, 1, 1)
+            float inputs:height = 0.762
+            float inputs:intensity = 3000
+            bool inputs:normalize = 1
+            float inputs:width = 0.508
+            float3 xformOp:rotateXYZ = (-90, 0, 0)
+            float3 xformOp:translate = (0.069, 0.55, 0.381)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+        }
+
+        def RectLight "Light_Top"
+        {
+            color3f inputs:color = (1, 1, 1)
+            float inputs:height = 1.016
+            float inputs:intensity = 3000
+            bool inputs:normalize = 1
+            float inputs:width = 0.508
+            float3 xformOp:rotateXYZ = (180, 0, 0)
+            float3 xformOp:translate = (0.069, 0.042, 0.762)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+        }
+    }
+
+    def Xform "WhiteBoxWalls" (
+        kind = "group"
+    )
+    {
+        def Material "WhiteMaterial"
+        {
+            token outputs:surface.connect = </World/WhiteBoxWalls/WhiteMaterial/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 1, 1)
+                color3f inputs:emissiveColor = (1, 1, 1)
+                float inputs:metallic = 0
+                float inputs:roughness = 1
+                token outputs:surface
+            }
+        }
+
+        def Cube "Back" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            rel material:binding = </World/WhiteBoxWalls/WhiteMaterial>
+            double size = 2
+            float3 xformOp:scale = (0.0015, 0.508, 0.381)
+            float3 xformOp:translate = (-0.185, 0.042, 0.381)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Left" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            rel material:binding = </World/WhiteBoxWalls/WhiteMaterial>
+            double size = 2
+            float3 xformOp:scale = (0.254, 0.0015, 0.381)
+            float3 xformOp:translate = (0.069, -0.466, 0.381)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Right" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            rel material:binding = </World/WhiteBoxWalls/WhiteMaterial>
+            double size = 2
+            float3 xformOp:scale = (0.254, 0.0015, 0.381)
+            float3 xformOp:translate = (0.069, 0.55, 0.381)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "Top" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            rel material:binding = </World/WhiteBoxWalls/WhiteMaterial>
+            double size = 2
+            float3 xformOp:scale = (0.254, 0.508, 0.0015)
+            float3 xformOp:translate = (0.069, 0.042, 0.762)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+    }
+
+    def Camera "PerceptionCamera"
+    {
+        float2 clippingRange = (0.01, 1000000)
+        float focalLength = 24
+        float3 xformOp:rotateXYZ = (0, 90, 0)
+        float3 xformOp:translate = (1.569, 0.042, 0.5)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    }
+
+    over "armDouble_SLDASM"
+    {
+        over "link6"
+        {
+            def Xform "camera_mount"
+            {
+                quatd xformOp:orient = (-0.2867561891604862, 0.7615425076392491, 0.5520530900119249, -0.181827618487855)
+                double3 xformOp:translate = (0.019461132355598487, 0.056706250737525776, 0.0023802215717731792)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                def "rsd455" (
+                    prepend payload = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Sensors/Intel/RealSense/rsd455.usd@
+                )
+                {
+                    over "RSD455" (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysxRigidBodyAPI"]
+                    )
+                    {
+                        bool physics:rigidBodyEnabled = 0
+                    }
+                }
+            }
+        }
+
+        over "link6l"
+        {
+            def Xform "camera_mount"
+            {
+                quatd xformOp:orient = (-0.1795634957638732, -0.44542157152396017, 0.8265509752808606, 0.29354737245024204)
+                double3 xformOp:translate = (-0.032322788953221965, -0.05050488320684733, 0.0021199260713944956)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+
+                def "rsd455" (
+                    prepend payload = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Sensors/Intel/RealSense/rsd455.usd@
+                )
+                {
+                    over "RSD455" (
+                        delete apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysxRigidBodyAPI"]
+                    )
+                    {
+                        bool physics:rigidBodyEnabled = 0
+                    }
+                }
+            }
+        }
+    }
+}
+
